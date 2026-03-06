@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { supabase } from "@/lib/supabaseClient";
+import { createClient } from "@/lib/supabase/client";
 
 export default function LoginPage() {
+  const supabase = createClient(); // ✅ cookie-aware client
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
@@ -13,14 +15,10 @@ export default function LoginPage() {
     setLoading(true);
     setMsg(null);
 
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      // optional: you can add emailRedirectTo later
-    });
+    const { error } = await supabase.auth.signUp({ email, password });
 
     if (error) setMsg(error.message);
-    else setMsg("Signup successful. Now try logging in (or check email if confirmations are enabled).");
+    else setMsg("Signup successful. Now try logging in.");
 
     setLoading(false);
   };
@@ -29,16 +27,10 @@ export default function LoginPage() {
     setLoading(true);
     setMsg(null);
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
 
-    if (error) {
-      setMsg(error.message);
-    } else {
-      window.location.href = "/dashboard";
-    }
+    if (error) setMsg(error.message);
+    else window.location.href = "/dashboard";
 
     setLoading(false);
   };
@@ -62,19 +54,11 @@ export default function LoginPage() {
           style={{ padding: 10, border: "1px solid #ccc", borderRadius: 8 }}
         />
 
-        <button
-          onClick={signIn}
-          disabled={loading}
-          style={{ padding: 10, borderRadius: 8, border: "1px solid #000" }}
-        >
+        <button onClick={signIn} disabled={loading} style={{ padding: 10, borderRadius: 8, border: "1px solid #000" }}>
           Login
         </button>
 
-        <button
-          onClick={signUp}
-          disabled={loading}
-          style={{ padding: 10, borderRadius: 8, border: "1px solid #000" }}
-        >
+        <button onClick={signUp} disabled={loading} style={{ padding: 10, borderRadius: 8, border: "1px solid #000" }}>
           Sign Up
         </button>
 
