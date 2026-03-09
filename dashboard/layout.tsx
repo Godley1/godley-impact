@@ -10,20 +10,15 @@ export default async function DashboardLayout({
 }) {
   const supabase = await createClient();
 
-const {
-  data: { user },
-  error,
-} = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-if (error) {
-  console.error("Auth error:", error);
-}
+  if (!user) {
+    redirect("/login");
+  }
 
-if (!user) {
-  redirect("/login");
-}
-
-const isAdmin = user?.email === "bsagodley@gmail.com";
+  const isAdmin = user.email === "bsagodley@gmail.com";
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900">

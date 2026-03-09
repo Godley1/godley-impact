@@ -1,4 +1,3 @@
-import { createClient } from "@/utils/supabase/server";
 import { logVolunteerHours } from "@/app/actions/logHours";
 
 export default async function LogHoursPage() {

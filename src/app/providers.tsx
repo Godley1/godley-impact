@@ -1,38 +1,44 @@
 "use client";
 
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { supabase } from "@/lib/supabaseClient";
+import { createClient } from "@/utils/supabase/client";
 
-const AuthContext = createContext({
+type AuthContextType = {
+  user: any;
+};
+
+const AuthContext = createContext<AuthContextType>({
   user: null,
-  loading: true,
 });
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+export default function Providers({ children }: { children: React.ReactNode }) {
+  const supabase = useMemo(() => createClient(), []);
   const [user, setUser] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const getSession = async () => {
-      const { data } = await supabase.auth.getSession();
-      setUser(data.session?.user ?? null);
-      setLoading(false);
+    const loadUser = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      setUser(user ?? null);
     };
 
-    getSession();
+    loadUser();
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
     });
 
-    return () => {
-      listener.subscription.unsubscribe();
-    };
-  }, []);
+    return () => subscription.unsubscribe();
+  }, [supabase]);
 
-  const value = useMemo(() => ({ user, loading }), [user, loading]);
-
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={{ user }}>
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth() {

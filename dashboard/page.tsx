@@ -1,7 +1,6 @@
-import type { CSSProperties } from "react";
-import Link from "next/link";
-import { createClient } from "@/utils/supabase/server";
-import ImpactChart from "@/components/dashboard/impact-chart";
+@/utils/supabase/serverimport Link from "next/link";
+import PageHeader from "@/components/dashboard/page-header";
+import DashboardCard from "@/components/dashboard/dashboard-card";
 
 type ReviewRow = {
   id: string;
@@ -16,17 +15,6 @@ type ReviewRow = {
 type ProfileRow = {
   id: string;
   full_name: string | null;
-};
-
-type MyHourRow = {
-  hours: number | null;
-  status: string | null;
-};
-
-type ImpactHourRow = {
-  service_date: string | null;
-  hours: number | null;
-  status: string | null;
 };
 
 export default async function DashboardPage() {
@@ -50,16 +38,84 @@ export default async function DashboardPage() {
 
   const displayName = profileData?.full_name || user.email || "User";
 
-  const { data: myHoursData, error: myHoursError } = await supabase
+  const { data: myHoursData, error } = await supabase
     .from("volunteer_hours")
     .select("hours, status")
     .eq("volunteer_id", user.id);
 
-  if (myHoursError) {
-    return <div style={{ padding: 24 }}>Error loading dashboard.</div>;
+  if (error) {
+    return (
+  <div className="space-y-6">
+
+    <PageHeader
+      title="Overview"
+      description="Track volunteer activity, approvals, and platform impact."
+    />
+
+    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+
+      <DashboardCard title="Total Hours">
+        <p className="text-3xl font-bold">{totalHours}</p>
+      </DashboardCard>
+
+      <DashboardCard title="Pending Submissions">
+        <p className="text-3xl font-bold">{pendingCount}</p>
+      </DashboardCard>
+
+      <DashboardCard title="Approved Hours">
+        <p className="text-3xl font-bold">{approvedHours}</p>
+      </DashboardCard>
+
+      <DashboardCard title="Requests Waiting">
+        <p className="text-3xl font-bold">{pendingApproval}</p>
+      </DashboardCard>
+
+    </div>
+
+    <div className="grid gap-6 lg:grid-cols-2">
+
+      <DashboardCard title="Recent Pending Requests">
+        {/* your existing table/list code goes here */}
+      </DashboardCard>
+
+      <DashboardCard title="Quick Actions">
+
+        <div className="flex flex-col gap-3">
+
+          <Link
+            href="/dashboard/my-hours"
+            className="rounded-lg border px-4 py-2 hover:bg-gray-50"
+          >
+            View My Hours
+          </Link>
+
+          <Link
+            href="/dashboard/log-hours"
+            className="rounded-lg border px-4 py-2 hover:bg-gray-50"
+          >
+            Log Volunteer Hours
+          </Link>
+
+          {isAdmin && (
+            <Link
+              href="/dashboard/review-hours"
+              className="rounded-lg border px-4 py-2 hover:bg-gray-50"
+            >
+              Review Submissions
+            </Link>
+          )}
+
+        </div>
+
+      </DashboardCard>
+
+    </div>
+
+  </div>
+);
   }
 
-  const myEntries: MyHourRow[] = myHoursData ?? [];
+  const myEntries = myHoursData ?? [];
 
   const totalHours = myEntries.reduce((sum, row) => sum + (row.hours ?? 0), 0);
 
@@ -71,69 +127,6 @@ export default async function DashboardPage() {
     .filter((row) => row.status?.toLowerCase() === "approved")
     .reduce((sum, row) => sum + (row.hours ?? 0), 0);
 
-  const { count: opportunitiesCount } = await supabase
-    .from("opportunities")
-    .select("*", { count: "exact", head: true });
-
-  const { count: joinedCount } = await supabase
-    .from("opportunity_signups")
-    .select("*", { count: "exact", head: true });
-
-  const { data: hoursData } = await supabase
-    .from("volunteer_hours")
-    .select("hours");
-
-  const totalHoursLogged =
-    hoursData?.reduce((sum, entry) => sum + (entry.hours || 0), 0) ?? 0;
-
-  const { count: pendingHours } = await supabase
-    .from("volunteer_hours")
-    .select("*", { count: "exact", head: true })
-    .eq("status", "pending");
-
-  const { data: impactHoursData } = await supabase
-    .from("volunteer_hours")
-    .select("service_date, hours, status");
-
-  const approvedImpactRows: ImpactHourRow[] =
-    (impactHoursData ?? []).filter(
-      (row) => row.status?.toLowerCase() === "approved" && row.service_date
-    ) ?? [];
-
-  const monthlyHoursMap = approvedImpactRows.reduce((acc, row) => {
-    if (!row.service_date) return acc;
-
-    const date = new Date(row.service_date);
-    if (Number.isNaN(date.getTime())) return acc;
-
-    const monthLabel = date.toLocaleString("default", { month: "short" });
-    acc[monthLabel] = (acc[monthLabel] || 0) + (row.hours || 0);
-
-    return acc;
-  }, {} as Record<string, number>);
-
-  const monthOrder = [
-    "Jan",
-    "Feb",
-    "Mar",
-    "Apr",
-    "May",
-    "Jun",
-    "Jul",
-    "Aug",
-    "Sep",
-    "Oct",
-    "Nov",
-    "Dec",
-  ];
-
-  const impactChartData = monthOrder
-    .filter((month) => monthlyHoursMap[month] !== undefined)
-    .map((month) => ({
-      month,
-      hours: monthlyHoursMap[month],
-    }));
-
   let totalPendingForApproval = 0;
   let totalApprovedSystemHours = 0;
   let recentPendingRequests: ReviewRow[] = [];
@@ -141,12 +134,12 @@ export default async function DashboardPage() {
   let volunteerMap: Record<string, string> = {};
 
   if (isAdmin) {
-    const { data: pendingRowsForCount } = await supabase
+    const { data: pendingCountData } = await supabase
       .from("volunteer_hours")
-      .select("id")
+      .select("id", { count: "exact", head: false })
       .eq("status", "pending");
 
-    totalPendingForApproval = pendingRowsForCount?.length ?? 0;
+    totalPendingForApproval = pendingCountData?.length ?? 0;
 
     const { data: approvedData } = await supabase
       .from("volunteer_hours")
@@ -158,9 +151,7 @@ export default async function DashboardPage() {
 
     const { data: pendingRows } = await supabase
       .from("volunteer_hours")
-      .select(
-        "id, event_name, hours, status, nonprofit_id, volunteer_id, service_date"
-      )
+      .select("id, event_name, hours, status, nonprofit_id, volunteer_id, service_date")
       .eq("status", "pending")
       .order("created_at", { ascending: false })
       .limit(5);
@@ -208,7 +199,7 @@ export default async function DashboardPage() {
     }
   }
 
-  const cardStyle: CSSProperties = {
+  const cardStyle: React.CSSProperties = {
     border: "1px solid #ddd",
     borderRadius: 16,
     padding: 18,
@@ -216,7 +207,7 @@ export default async function DashboardPage() {
     boxShadow: "0 2px 10px rgba(0,0,0,0.04)",
   };
 
-  const linkButtonStyle: CSSProperties = {
+  const linkButtonStyle: React.CSSProperties = {
     display: "inline-block",
     padding: "10px 14px",
     border: "1px solid #111",
@@ -250,7 +241,7 @@ export default async function DashboardPage() {
             ? "repeat(4, minmax(200px, 1fr))"
             : "repeat(3, minmax(200px, 1fr))",
           gap: 16,
-          marginBottom: 20,
+          marginBottom: 28,
         }}
       >
         <div style={cardStyle}>
@@ -289,43 +280,6 @@ export default async function DashboardPage() {
       <section
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(4, minmax(180px, 1fr))",
-          gap: 16,
-          marginBottom: 28,
-        }}
-      >
-        <div style={cardStyle}>
-          <div style={{ fontSize: 14, color: "#666" }}>Opportunities Created</div>
-          <div style={{ fontSize: 32, fontWeight: 700, marginTop: 8 }}>
-            {opportunitiesCount ?? 0}
-          </div>
-        </div>
-
-        <div style={cardStyle}>
-          <div style={{ fontSize: 14, color: "#666" }}>Opportunities Joined</div>
-          <div style={{ fontSize: 32, fontWeight: 700, marginTop: 8 }}>
-            {joinedCount ?? 0}
-          </div>
-        </div>
-
-        <div style={cardStyle}>
-          <div style={{ fontSize: 14, color: "#666" }}>Volunteer Hours Logged</div>
-          <div style={{ fontSize: 32, fontWeight: 700, marginTop: 8 }}>
-            {totalHoursLogged}
-          </div>
-        </div>
-
-        <div style={cardStyle}>
-          <div style={{ fontSize: 14, color: "#666" }}>Pending Approvals</div>
-          <div style={{ fontSize: 32, fontWeight: 700, marginTop: 8 }}>
-            {pendingHours ?? 0}
-          </div>
-        </div>
-      </section>
-
-      <section
-        style={{
-          display: "grid",
           gridTemplateColumns: isAdmin ? "1.2fr 1fr" : "1fr",
           gap: 20,
           alignItems: "start",
@@ -345,31 +299,17 @@ export default async function DashboardPage() {
               View My Logged Hours
             </Link>
 
-            <Link href="/dashboard/opportunities" style={linkButtonStyle}>
-              View Opportunities
-            </Link>
-
-            <Link href="/dashboard/my-opportunities" style={linkButtonStyle}>
-              My Opportunities
-            </Link>
-
             {isAdmin && (
-              <>
-                <Link href="/dashboard/create-opportunity" style={linkButtonStyle}>
-                  Create Opportunity
-                </Link>
-
-                <Link href="/dashboard/review-hours" style={linkButtonStyle}>
-                  Review Hours
-                </Link>
-              </>
+              <Link href="/dashboard/review-hours" style={linkButtonStyle}>
+                Review Hours
+              </Link>
             )}
           </div>
 
           <div style={{ marginTop: 20, color: "#666", fontSize: 14 }}>
             {isAdmin
-              ? "Use this dashboard to review incoming submissions, manage opportunities, and monitor platform impact."
-              : "Use this dashboard to join opportunities, submit service hours, and track approval progress."}
+              ? "Use this dashboard to review incoming submissions and manage platform activity."
+              : "Use this dashboard to submit service hours and track approval progress."}
           </div>
         </div>
 
@@ -387,7 +327,9 @@ export default async function DashboardPage() {
                   background: "#f7f7f7",
                 }}
               >
-                <div style={{ fontSize: 13, color: "#666" }}>Pending Requests</div>
+                <div style={{ fontSize: 13, color: "#666" }}>
+                  Pending Requests
+                </div>
                 <div style={{ fontSize: 24, fontWeight: 700 }}>
                   {totalPendingForApproval}
                 </div>
@@ -410,22 +352,6 @@ export default async function DashboardPage() {
             </div>
           </div>
         )}
-      </section>
-
-      <section style={{ marginTop: 28 }}>
-        <div style={cardStyle}>
-          <h2 style={{ marginTop: 0, marginBottom: 16, fontSize: 22 }}>
-            Community Impact
-          </h2>
-
-          {impactChartData.length === 0 ? (
-            <p style={{ color: "#666", margin: 0 }}>
-              No approved volunteer hour data is available yet.
-            </p>
-          ) : (
-            <ImpactChart data={impactChartData} />
-          )}
-        </div>
       </section>
 
       {isAdmin && (
@@ -454,49 +380,19 @@ export default async function DashboardPage() {
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
                   <tr>
-                    <th
-                      style={{
-                        textAlign: "left",
-                        padding: 10,
-                        borderBottom: "1px solid #ddd",
-                      }}
-                    >
+                    <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid #ddd" }}>
                       Volunteer
                     </th>
-                    <th
-                      style={{
-                        textAlign: "left",
-                        padding: 10,
-                        borderBottom: "1px solid #ddd",
-                      }}
-                    >
+                    <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid #ddd" }}>
                       Date
                     </th>
-                    <th
-                      style={{
-                        textAlign: "left",
-                        padding: 10,
-                        borderBottom: "1px solid #ddd",
-                      }}
-                    >
+                    <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid #ddd" }}>
                       Event
                     </th>
-                    <th
-                      style={{
-                        textAlign: "left",
-                        padding: 10,
-                        borderBottom: "1px solid #ddd",
-                      }}
-                    >
+                    <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid #ddd" }}>
                       Hours
                     </th>
-                    <th
-                      style={{
-                        textAlign: "left",
-                        padding: 10,
-                        borderBottom: "1px solid #ddd",
-                      }}
-                    >
+                    <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid #ddd" }}>
                       Nonprofit
                     </th>
                   </tr>
